@@ -16,31 +16,39 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHostedService<PlaySimulator>();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowVercel", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.SetIsOriginAllowed(origin =>
-                   origin.EndsWith(".vercel.app") ||
-                   origin == "http://localhost:5173" ||
-                   origin == "http://localhost:3000")
+        policy.WithOrigins(
+                "https://royalty-web.onrender.com",
+                "http://localhost:5173",
+                "http://localhost:3000"
+              )
+              .SetIsOriginAllowed(origin =>
+                  origin.EndsWith(".onrender.com") ||
+                  origin.EndsWith(".vercel.app"))
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
-
 var app = builder.Build();
-app.UseCors("AllowVercel");
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// 1. Routing must come first
+app.UseRouting();
 
-app.UseHttpsRedirection();
+// 2. CORS must come right after Routing, but BEFORE Auth and Endpoints
+app.UseCors("AllowFrontend");
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
+// 3. Authentication & Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
+// 4. Controller endpoints
 app.MapControllers();
+
+// If you have static fallback files:
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapFallbackToFile("index.html");
 
 app.Run();
