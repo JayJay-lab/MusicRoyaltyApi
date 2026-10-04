@@ -1,0 +1,6 @@
+@MusicRoyaltyApi_HostAddress = http://localhost:5220
+
+GET {{MusicRoyaltyApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Royalty manager</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mu:#6b7385;--ac:#4f46e5;--bd:#e2e5ec;--ok:#15803d;--er:#b91c1c}
+@media(prefers-color-scheme:dark){:root{--bg:#14161c;--card:#1d2029;--tx:#e8eaf0;--mu:#9aa1b3;--ac:#8b85ff;--bd:#2c303c;--ok:#16a34a;--er:#dc2626}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--bd)}
+main{max-width:1000px;margin:20px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+button,input,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button{cursor:pointer}button.p{background:var(--ac);color:#fff;border-color:var(--ac)}button.on{border-color:var(--ac);color:var(--ac)}button.d{color:var(--er)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.row>*{flex:1;min-width:120px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mu);font-weight:500}
+.sc{overflow-x:auto}h2{margin:0 0 8px;font-size:17px;font-weight:500}.mu{color:var(--mu)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90%}
+</style></head><body>
+<header><strong>Royalty manager</strong><div id="who"></div></header>
+<main>
+<div id="login" class="card" style="max-width:380px;margin:60px auto">
+<h2>Sign in</h2>
+<div class="row"><select id="lr" onchange="lrc()"><option value="admin">Admin</option><option value="client">Client</option></select></div>
+<div class="row"><input id="lu"></div><div class="row"><input id="lp" type="password" placeholder="Password"></div>
+<div class="row"><button class="p" onclick="login()">Sign in</button></div>
+</div>
+<div id="app" style="display:none"><nav id="nv"></nav><div id="v"></div></div>
+</main><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);let U=null,TY=[],TB=[],UL=[],RL=[];
+const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--ok)';t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
+async function api(p,m='GET',b){const o={method:m,headers:{}};if(b instanceof FormData)o.body=b;else if(b){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
+ try{const r=await fetch('/api/'+p,o),t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}
+ if(!r.ok){toast(typeof d==='string'&&d?d:'Request failed ('+r.status+')',true);return null}return d}catch{toast('Cannot reach the API',true);return null}}
+function tbl(rows,act){if(!rows||!rows.length)return'<p class="mu">No data.</p>';const k=Object.keys(rows[0]);
+ return'<div class="sc"><table><tr>'+k.map(x=>'<th>'+esc(x)+'</th>').join('')+(act?'<th></th>':'')+'</tr>'+rows.map(r=>'<tr>'+k.map(x=>'<td>'+esc(r[x]!==null&&typeof r[x]==='object'?JSON.stringify(r[x]):r[x])+'</td>').join('')+(act?'<td>'+act(r)+'</td>':'')+'</tr>').join('')+'</table></div>'}
+function lrc(){const a=$('#lr').value==='admin';$('#lp').style.display=a?'':'none';$('#lu').placeholder=a?'Username':'Email address'}lrc();
+async function login(){const d=await api('auth/login','POST',{role:$('#lr').value,username:$('#lu').value,password:$('#lp').value});if(d){U=d;show()}}
+function show(){$('#login').style.display='none';$('#app').style.display='block';
+ $('#who').innerHTML=esc(U.name)+' ('+U.role+') <button onclick="location.reload()">Log out</button>';
+ const m=U.role==='admin'?[['Reports',vReports],['Users',vUsers],['Revenue and payouts',vRev],['Tables',vTab],['Data',vData]]:[['My account',vMe],['Upload track',vUp]];
+ $('#nv').innerHTML='';m.forEach(([n,f],i)=>{const b=document.createElement('button');b.textContent=n;
+ b.onclick=()=>{document.querySelectorAll('#nv button').forEach(x=>x.classList.remove('on'));b.classList.add('on');f()};$('#nv').appendChild(b);if(!i)b.click()})}
+
+/* ---------- admin: reports ---------- */
+const R={earnings:'Earnings per user','revenue-by-source':'Revenue by source','top-tracks':'Top tracks','contribution-issues':'Percentage issues','pending-payouts':'Pending payouts','audit-log':'Audit log'};
+function vReports(){$('#v').innerHTML='<div class="card"><h2>Reports</h2><div class="row">'+Object.entries(R).map(([k,v])=>`<button onclick="rep('${k}')">${v}</button>`).join('')+'</div><div id="ro"></div></div>';rep('earnings')}
+async function rep(k){const d=await api('reports/'+k);if(d)$('#ro').innerHTML='<h2>'+R[k]+'</h2>'+tbl(d)}
+
+/* ---------- admin: users ---------- */
+function vUsers(){$('#v').innerHTML=`<div class="card"><h2>Add user</h2><div class="row"><input id="uf" placeholder="Full name"><input id="ua" placeholder="Artist name"><input id="us" placeholder="Spotify ID"><input id="ue" placeholder="Email"></div>
+<div class="row"><input id="bn" placeholder="Bank name"><input id="bc" placeholder="Account number"><input id="bb" placeholder="Branch code"><button class="p" onclick="addUser()">Add user</button></div></div>
+<div class="card"><h2>Users</h2><div id="ul"></div></div>`;listUsers()}
+async function listUsers(){const d=await api('users');if(d)$('#ul').innerHTML=tbl(d,r=>`<button class="d" onclick="delUser(${r.userId})">Delete</button>`)}
+async function addUser(){const bn=$('#bn').value.trim();
+ const b={fullName:$('#uf').value,artistName:$('#ua').value||null,spotifyId:$('#us').value||null,email:$('#ue').value,bankAccount:bn?{bankName:bn,accountNumber:$('#bc').value,branchCode:$('#bb').value}:null};
+ if(await api('users','POST',b)!==null){toast('User added');vUsers()}}
+async function delUser(i){if(confirm('Delete this user?')&&await api('users/'+i,'DELETE')!==null){toast('User deleted');listUsers()}}
+
+/* ---------- admin: revenue and payouts ---------- */
+async function vRev(){const s=await api('revenue/sources');if(!s)return;
+ $('#v').innerHTML=`<div class="card"><h2>New revenue event</h2><div class="row"><select id="rs">${s.map(x=>`<option value="${x.sourceId}">${esc(x.sourceName)}</option>`).join('')}</select><input id="ra" type="number" step="0.01" placeholder="Gross amount"><input id="rd" type="date"><button class="p" onclick="addEv()">Create</button></div></div>
+<div class="card"><h2>Pay clients for a month</h2><p class="mu">Marks all pending payouts for that month as paid.</p><div class="row"><input id="py" type="number" value="${new Date().getFullYear()}"><input id="pm" type="number" min="1" max="12" placeholder="Month (1-12)"><button class="p" onclick="payM()">Pay clients</button></div></div>
+<div class="card"><h2>Revenue events</h2><div id="el"></div></div>`;evs()}
+async function evs(){const d=await api('revenue/events');if(d)$('#el').innerHTML=tbl(d,r=>r.allocated?'<span class="mu">Allocated</span>':`<button onclick="alloc(${r.revenueEventId})">Allocate</button>`)}
+async function addEv(){if(await api('revenue/events','POST',{sourceId:+$('#rs').value,grossAmount:+$('#ra').value,eventDate:$('#rd').value||null})!==null){toast('Event created');evs()}}
+async function alloc(i){const d=await api('revenue/events/'+i+'/allocate','POST');if(d){toast('Allocated across '+d.tracksAllocated+' tracks');evs()}}
+async function payM(){const d=await api(`revenue/pay/${$('#py').value}/${$('#pm').value}`,'POST');if(d)toast(d.payoutsMarkedPaid+' payouts marked as paid')}
+
+/* ---------- admin: tables ---------- */
+async function vTab(){const [t,ty]=await Promise.all([api('tables'),api('tables/types')]);if(!t||!ty)return;TB=t;TY=ty;
+ $('#v').innerHTML=`<div class="card"><h2>Create table</h2><div class="row"><input id="tn" placeholder="table_name"></div><div id="cols"></div>
+<div class="row"><button onclick="addCol()">+ Column</button><button class="p" onclick="mkTab()">Create table</button></div><p class="mu">An id column is added automatically. Use "Link to" to add a foreign key to another table.</p></div>
+<div class="card"><h2>Import table from CSV</h2><div class="row"><input id="in" placeholder="new_table_name"><input id="if" type="file" accept=".csv"><button class="p" onclick="imp()">Import</button></div></div>
+<div class="card"><h2>Tables</h2><div id="tl"></div></div>`;addCol();
+ $('#tl').innerHTML=tbl(TB.map(x=>({name:x.name,type:x.isCore?'core':'custom'})),r=>r.type==='core'?'':`<button class="d" onclick="dropT('${r.name}')">Drop</button>`)}
+function addCol(){const d=document.createElement('div');d.className='row';
+ d.innerHTML=`<input class="cn" placeholder="column_name"><select class="ct">${TY.map(x=>`<option>${x}</option>`).join('')}</select><select class="cr"><option value="">Link to: none</option>${TB.map(x=>`<option>${esc(x.name)}</option>`).join('')}</select>`;$('#cols').appendChild(d)}
+async function mkTab(){const columns=[...document.querySelectorAll('#cols .row')].map(r=>({name:r.querySelector('.cn').value,type:r.querySelector('.ct').value,referencesTable:r.querySelector('.cr').value||null})).filter(c=>c.name);
+ if(await api('tables','POST',{tableName:$('#tn').value,columns})!==null){toast('Table created');vTab()}}
+async function dropT(n){if(confirm('Drop table '+n+'? Its data will be deleted.')&&await api('tables/'+n,'DELETE')!==null){toast('Table dropped');vTab()}}
+async function imp(){const f=$('#if').files[0];if(!f)return toast('Choose a CSV file',true);const fd=new FormData();fd.append('tableName',$('#in').value);fd.append('file',f);
+ const d=await api('tables/import','POST',fd);if(d){toast('Imported '+d.rows+' rows');vTab()}}
+
+/* ---------- admin: data (add, edit, delete rows in any table) ---------- */
+let DT='',DC=[],DR=[],EID=null;
+async function vData(){const t=await api('tables');if(!t)return;
+ $('#v').innerHTML=`<div class="card"><h2>Data</h2><div class="row"><select id="dt" onchange="loadD()">${t.map(x=>`<option>${esc(x.name)}</option>`).join('')}</select></div><div id="df"></div></div><div class="card"><div id="dg"></div></div>`;loadD()}
+function fld(c){if(c.type==='boolean')return`<select class="df" data-c="${esc(c.name)}" title="${esc(c.name)}"><option value="">${esc(c.name)}</option><option>true</option><option>false</option></select>`;
+ const ty=/int|numeric|double|real/.test(c.type)?'number':c.type==='date'?'date':'text';
+ return`<input class="df" data-c="${esc(c.name)}" type="${ty}" step="any" title="${esc(c.name)}" placeholder="${esc(c.name)}${c.hasDefault?' (default)':''}">`}
+async function loadD(){DT=$('#dt').value;EID=null;const d=await api('data/'+DT);if(!d)return;DC=d.columns;DR=d.rows;const pk=DC.find(c=>c.isPk);
+ $('#df').innerHTML=d.readOnly?'<p class="mu">This table is read-only.</p>':'<h2 id="ft">Add row</h2><div class="row">'+DC.filter(c=>!c.isPk).map(fld).join('')+'</div><div class="row"><button class="p" onclick="saveD()">Save</button><button onclick="loadD()">Clear</button></div>';
+ $('#dg').innerHTML=tbl(DR,d.readOnly?null:r=>`<button onclick="editD(${r[pk.name]})">Edit</button> <button class="d" onclick="delD(${r[pk.name]})">Delete</button>`)}
+function editD(id){const pk=DC.find(c=>c.isPk),r=DR.find(x=>x[pk.name]==id);EID=id;$('#ft').textContent='Edit row '+id;
+ document.querySelectorAll('.df').forEach(i=>{const v=r[i.dataset.c];i.value=v===null||v===undefined?'':String(v)});scrollTo(0,0)}
+async function saveD(){const b={};document.querySelectorAll('.df').forEach(i=>b[i.dataset.c]=i.value);
+ const d=EID===null?await api('data/'+DT,'POST',b):await api('data/'+DT+'/'+EID,'PUT',b);if(d!==null){toast(EID===null?'Row added':'Row updated');loadD()}}
+async function delD(id){if(confirm('Delete this row?')&&await api('data/'+DT+'/'+id,'DELETE')!==null){toast('Row deleted');loadD()}}
+
+/* ---------- client ---------- */
+async function vMe(){const d=await api('users/'+U.userId+'/balance');if(!d)return;
+ $('#v').innerHTML=`<div class="card"><h2>Hello, ${esc(d.fullName)}</h2><div class="row"><div><div class="mu">Balance due</div><div style="font-size:26px">R ${d.totalBalanceDue.toFixed(2)}</div></div><div><div class="mu">Total paid</div><div style="font-size:26px">R ${d.totalPaid.toFixed(2)}</div></div></div></div>
+<div class="card"><h2>My payouts</h2>${tbl(d.payoutBreakdown)}</div><div class="card"><h2>Bank accounts</h2>${tbl(d.bankAccounts)}</div>`}
+async function vUp(){const [u,r]=await Promise.all([api('users'),api('lookup/roles')]);if(!u||!r)return;UL=u;RL=r;
+ $('#v').innerHTML=`<div class="card"><h2>Upload a track</h2><div class="row"><input id="tt" placeholder="Title"><input id="td" type="number" placeholder="Duration (seconds)"></div>
+<h2>Contributions</h2><p class="mu">Percentages must total 100 or less.</p><div id="cc"></div><div class="row"><button onclick="addC()">+ Contributor</button><button class="p" onclick="upl()">Upload track</button></div></div>`;addC()}
+function addC(){const d=document.createElement('div');d.className='row';
+ d.innerHTML=`<select class="cu">${UL.map(x=>`<option value="${x.userId}">${esc(x.fullName)}</option>`).join('')}</select><select class="cl">${RL.map(x=>`<option value="${x.roleId}">${esc(x.roleName)}</option>`).join('')}</select><input class="cp" type="number" step="0.01" placeholder="Percentage">`;$('#cc').appendChild(d)}
+async function upl(){const contributions=[...document.querySelectorAll('#cc .row')].map(r=>({userId:+r.querySelector('.cu').value,roleId:+r.querySelector('.cl').value,percentageCut:+r.querySelector('.cp').value}));
+ const d=await api('users/'+U.userId+'/tracks','POST',{title:$('#tt').value,duration:+$('#td').value,contributions});if(d){toast('Track uploaded');vUp()}}
+</script></body></html>
